@@ -1,0 +1,6 @@
+{
+  "appId": "com.smarthydration.app",
+  "appName": "Drink Reminder",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

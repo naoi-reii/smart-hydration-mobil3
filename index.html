@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Drink Reminder - Smart Hydration</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+    <!-- CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jeep-sqlite/dist/jeep-sqlite.js"></script>
+</head>
+<body>
+    <div id="app-container">
+        <!-- Login / Register Screen -->
+        <section id="screen-login" class="screen active">
+            <div class="auth-container">
+                <div class="logo">
+                    <i data-lucide="droplet" class="logo-icon"></i>
+                </div>
+                <h1 class="app-name">Drink Reminder</h1>
+                <p class="tagline">Your hydration companion</p>
+
+                <form id="auth-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" placeholder="Enter username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="Enter password" required>
+                    </div>
+                    <div id="register-fields" class="hidden">
+                        <div class="form-group">
+                            <label for="display-name">Display Name</label>
+                            <input type="text" id="display-name" placeholder="How should we call you?">
+                        </div>
+                        <div class="form-group">
+                            <label for="confirm-password">Confirm Password</label>
+                            <input type="password" id="confirm-password" placeholder="Confirm password">
+                        </div>
+                    </div>
+                    <div id="auth-error" class="error-message"></div>
+                    <button type="submit" id="btn-primary" class="btn btn-primary">Sign In</button>
+                    <button type="button" id="btn-toggle-auth" class="btn btn-outline">Create Account</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Main App Container (Hidden during login) -->
+        <main id="main-app" class="hidden">
+            <!-- Dashboard Tab -->
+            <section id="tab-tracker" class="tab-content active">
+                <header class="tab-header">
+                    <h2>Hydration Dashboard</h2>
+                    <p>Stay hydrated. Stay consistent.</p>
+                </header>
+                
+                <div class="progress-card">
+                    <div class="progress-ring-container">
+                        <svg class="progress-ring" width="200" height="200">
+                            <circle class="progress-ring-circle-bg" stroke="#E2E8F0" stroke-width="12" fill="transparent" r="85" cx="100" cy="100"/>
+                            <circle id="progress-ring-circle" class="progress-ring-circle" stroke="#06B6D4" stroke-width="12" stroke-linecap="round" fill="transparent" r="85" cx="100" cy="100"/>
+                        </svg>
+                        <div class="progress-text">
+                            <span id="progress-current">0</span>
+                            <span class="progress-separator">/</span>
+                            <span id="progress-goal">1925</span>
+                            <span class="progress-unit">ml</span>
+                            <div id="progress-percent">0%</div>
+                        </div>
+                    </div>
+                    <button id="btn-add-water-modal" class="btn btn-fab">
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
+
+                <div class="history-section">
+                    <h3>Today's Logs</h3>
+                    <div id="logs-list" class="logs-list">
+                        <!-- Logs will be injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reminders Tab -->
+            <section id="tab-reminders" class="tab-content">
+                <header class="tab-header">
+                    <h2>Hydration Reminders</h2>
+                </header>
+                
+                <div class="card">
+                    <div class="form-group">
+                        <label for="reminder-label">Reminder Label</label>
+                        <input type="text" id="reminder-label" placeholder="e.g., Drink water now">
+                    </div>
+                    <div class="form-group">
+                        <label for="reminder-interval">Interval</label>
+                        <select id="reminder-interval">
+                            <option value="600000">10 min</option>
+                            <option value="1800000">30 min</option>
+                            <option value="3600000">1 hour</option>
+                            <option value="7200000">2 hours</option>
+                        </select>
+                    </div>
+                    <button id="btn-add-reminder" class="btn btn-primary">Add Reminder</button>
+                </div>
+
+                <div class="reminders-section">
+                    <h3>Active Reminders</h3>
+                    <div id="reminders-list" class="reminders-list">
+                        <!-- Reminders will be injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Progress Tab -->
+            <section id="tab-progress" class="tab-content">
+                <header class="tab-header">
+                    <h2>Weekly Progress</h2>
+                </header>
+                
+                <div class="card chart-container">
+                    <canvas id="progress-chart"></canvas>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-avg">0</div>
+                        <div class="stat-label">Avg Daily Intake</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-best">0</div>
+                        <div class="stat-label">Best Day</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-goal-met">0</div>
+                        <div class="stat-label">Goals Met</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="tab-settings" class="tab-content">
+                <header class="tab-header">
+                    <h2>Settings</h2>
+                </header>
+                
+                <div class="card">
+                    <h3>Preferences</h3>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label>Notifications</label>
+                            <p>Enable/disable reminders</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-notifications">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label>Haptic Feedback</label>
+                            <p>Vibration on interactions</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-haptic">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <label>Dark Mode</label>
+                            <p>Switch to dark theme</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-dark-mode">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <button id="btn-test-notification" class="btn btn-outline btn-small">Test Notification</button>
+                </div>
+
+                <div class="card">
+                    <h3>Profile</h3>
+                    <div class="form-group">
+                        <label for="setting-display-name">Display Name</label>
+                        <input type="text" id="setting-display-name">
+                    </div>
+                    <div class="form-group">
+                        <label for="setting-daily-goal">Daily Goal (ml)</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" id="setting-daily-goal" style="flex: 1;">
+                            <button id="btn-open-goal-calc" class="btn btn-outline btn-small" style="margin-bottom: 0;">Calculate</button>
+                        </div>
+                    </div>
+                    <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
+                </div>
+
+                <div class="card">
+                    <h3>Account</h3>
+                    <button id="btn-open-change-password" class="btn btn-outline">Change Password</button>
+                    <button id="btn-logout" class="btn btn-danger btn-block">Log Out</button>
+                </div>
+            </section>
+
+            <!-- Bottom Navigation -->
+            <nav class="bottom-nav">
+                <button class="nav-item active" data-tab="tracker">
+                    <i data-lucide="droplet"></i>
+                    <span>Tracker</span>
+                </button>
+                <button class="nav-item" data-tab="reminders">
+                    <i data-lucide="bell"></i>
+                    <span>Reminders</span>
+                </button>
+                <button class="nav-item" data-tab="progress">
+                    <i data-lucide="bar-chart-3"></i>
+                    <span>Progress</span>
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <i data-lucide="settings"></i>
+                    <span>Settings</span>
+                </button>
+            </nav>
+        </main>
+
+        <!-- Modals -->
+        <div id="modal-add-water" class="modal">
+            <div class="modal-content">
+                <h3>Add Water</h3>
+                <div class="form-group">
+                    <label for="water-amount">Amount (ml)</label>
+                    <input type="number" id="water-amount" value="250">
+                </div>
+                <div class="quick-adds">
+                    <button class="btn-quick-add" data-amount="150">150ml</button>
+                    <button class="btn-quick-add" data-amount="250">250ml</button>
+                    <button class="btn-quick-add" data-amount="500">500ml</button>
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-cancel-add" class="btn btn-outline">Cancel</button>
+                    <button id="btn-save-water" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-change-password" class="modal">
+            <div class="modal-content">
+                <h3>Change Password</h3>
+                <div class="form-group">
+                    <label for="new-password">New Password</label>
+                    <input type="password" id="new-password" placeholder="Min 8 chars, 1 capital, 1 special">
+                </div>
+                <div class="form-group">
+                    <label for="confirm-new-password">Confirm New Password</label>
+                    <input type="password" id="confirm-new-password" placeholder="Confirm new password">
+                </div>
+                <div id="change-password-error" class="error-message"></div>
+                <div class="modal-actions">
+                    <button id="btn-cancel-change-password" class="btn btn-outline">Cancel</button>
+                    <button id="btn-save-new-password" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-goal-calc" class="modal">
+            <div class="modal-content">
+                <h3>Smart Goal Calculator</h3>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">Calculate your ideal daily intake based on your body and lifestyle.</p>
+                
+                <div class="form-group">
+                    <label for="calc-weight">Weight (kg)</label>
+                    <input type="number" id="calc-weight" placeholder="e.g., 70">
+                </div>
+                
+                <div class="form-group">
+                    <label for="calc-gender">Gender</label>
+                    <select id="calc-gender">
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="calc-activity">Activity Level</label>
+                    <select id="calc-activity">
+                        <option value="0">Low (Sedentary)</option>
+                        <option value="500">Medium (Active)</option>
+                        <option value="1000">High (Athlete/Heavy labor)</option>
+                    </select>
+                </div>
+
+                <div id="calc-result" class="hidden" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--primary-light); border-radius: 12px; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600;">Recommended Goal:</div>
+                    <div id="calc-result-value" style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">2500 ml</div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="btn-cancel-calc" class="btn btn-outline">Cancel</button>
+                    <button id="btn-apply-calc" class="btn btn-primary">Apply Goal</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="db.js"></script>
+    <script src="notifications.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
