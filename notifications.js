@@ -133,5 +133,54 @@ window.notifyLayer = {
     vibrate,
     requestNotificationPermission,
     fireNotification,
+    syncNativeReminders,
     VIBRATION_PATTERNS
 };
+
+/**
+ * Sync active reminders to Capacitor Local Notifications
+ * This ensures reminders fire even when the app is in the background
+ * by pre-scheduling a batch of future notifications.
+ * @param {Array} reminders - List of active reminders
+ */
+async function syncNativeReminders(reminders) {
+    if (!window.appSettings.notifications_enabled) return;
+    
+    if (window.Capacitor && window.Capacitor.Plugins.LocalNotifications) {
+        const { LocalNotifications } = window.Capacitor.Plugins;
+        try {
+            // Cancel existing pending notifications
+            const pending = await LocalNotifications.getPending();
+            if (pending.notifications.length > 0) {
+                await LocalNotifications.cancel({ notifications: pending.notifications });
+            }
+
+            const notificationsToSchedule = [];
+            const now = Date.now();
+            let notifId = 1; // start ID
+            
+            // Schedule the next 24 occurrences for each reminder
+            reminders.forEach(rem => {
+                let interval = parseInt(rem.interval_ms);
+                if (isNaN(interval) || interval <= 0) return;
+                
+                for (let i = 1; i <= 24; i++) {
+                    notificationsToSchedule.push({
+                        id: notifId++,
+                        title: "Drink Reminder",
+                        body: rem.label,
+                        schedule: { at: new Date(now + (interval * i)) },
+                        smallIcon: "ic_stat_icon_config_sample" // generic small icon if needed, or omit
+                    });
+                }
+            });
+
+            if (notificationsToSchedule.length > 0) {
+                await LocalNotifications.schedule({ notifications: notificationsToSchedule });
+                console.log(`Scheduled ${notificationsToSchedule.length} native background reminders.`);
+            }
+        } catch (e) {
+            console.warn('Capacitor LocalNotifications sync error', e);
+        }
+    }
+}

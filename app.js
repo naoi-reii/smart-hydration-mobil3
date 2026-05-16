@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.dbReady = true;
         
         // 3. Check Session
-        const savedUser = sessionStorage.getItem('user');
+        const savedUser = localStorage.getItem('user');
         if (savedUser) {
             state.currentUser = JSON.parse(savedUser);
             await loadUserSettings();
@@ -160,7 +160,7 @@ async function handleAuth(e) {
         }
 
         state.currentUser = user;
-        sessionStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('user', JSON.stringify(user));
         await loadUserSettings();
         showMainApp();
     } catch (err) {
@@ -192,7 +192,7 @@ function showMainApp() {
 }
 
 function handleLogout() {
-    sessionStorage.removeItem('user');
+    localStorage.removeItem('user');
     state.currentUser = null;
     state.settings = null;
     location.reload();
@@ -296,6 +296,11 @@ async function refreshReminders() {
     const reminders = await window.dbLayer.getReminders(state.currentUser.user_id);
     state.activeReminders = reminders;
     
+    // Sync native background scheduling if available
+    if (window.notifyLayer && window.notifyLayer.syncNativeReminders) {
+        window.notifyLayer.syncNativeReminders(reminders);
+    }
+    
     const listEl = document.getElementById('reminders-list');
     listEl.innerHTML = reminders.map(rem => `
         <div class="reminder-item">
@@ -347,9 +352,11 @@ function startReminderChecks() {
 
             const lastFired = lastFiredReminders[rem.reminder_id];
             if (now - lastFired >= rem.interval_ms) {
-                // FIRE NOTIFICATION
-                window.notifyLayer.fireNotification("Drink Reminder", rem.label);
-                window.notifyLayer.vibrate(window.notifyLayer.VIBRATION_PATTERNS.REMINDER);
+                // FIRE NOTIFICATION only if not handled by native background scheduling
+                if (!(window.Capacitor && window.Capacitor.Plugins.LocalNotifications)) {
+                    window.notifyLayer.fireNotification("Drink Reminder", rem.label);
+                    window.notifyLayer.vibrate(window.notifyLayer.VIBRATION_PATTERNS.REMINDER);
+                }
                 
                 // Show in-app toast for visual confirmation in browser
                 showToast(`🔔 Reminder: ${rem.label}`, 5000);
