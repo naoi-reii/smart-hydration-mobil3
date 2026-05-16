@@ -64,7 +64,7 @@ async function loadUserSettings() {
 function applySettings() {
     if (!state.settings) return;
     // Theme
-    document.body.setAttribute('data-theme', state.settings.dark_mode ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', state.settings.dark_mode ? 'dark' : 'light');
     // UI Values
     document.getElementById('setting-notifications').checked = !!state.settings.notifications_enabled;
     document.getElementById('setting-haptic').checked = !!state.settings.haptic_enabled;
@@ -104,6 +104,11 @@ function setupEventListeners() {
     document.getElementById('btn-save-settings').addEventListener('click', handleSaveSettings);
     document.getElementById('btn-test-notification').addEventListener('click', handleTestNotification);
     document.getElementById('btn-logout').addEventListener('click', handleLogout);
+    
+    // Immediate dark mode toggle
+    document.getElementById('setting-dark-mode').addEventListener('change', (e) => {
+        document.documentElement.setAttribute('data-theme', e.target.checked ? 'dark' : 'light');
+    });
 
     // Change Password
     document.getElementById('btn-open-change-password').addEventListener('click', () => openModal('modal-change-password'));

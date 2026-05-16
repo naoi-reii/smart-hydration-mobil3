@@ -13,12 +13,26 @@ window.appSettings = {
  * Trigger device vibration with a specific pattern
  * @param {number|number[]} pattern - Vibration pattern in ms
  */
-function vibrate(pattern) {
-    // CAPACITOR NOTE: Replace navigator.vibrate() with @capacitor/haptics:
-    // import { Haptics, ImpactStyle } from '@capacitor/haptics';
-    // await Haptics.impact({ style: ImpactStyle.Medium });
-    
+async function vibrate(pattern) {
     if (!window.appSettings.haptic_enabled) return;
+
+    // Use Capacitor Haptics if available
+    if (window.Capacitor && window.Capacitor.Plugins.Haptics) {
+        const { Haptics } = window.Capacitor.Plugins;
+        try {
+            if (pattern === VIBRATION_PATTERNS.ERROR) {
+                await Haptics.notification({ type: 'ERROR' });
+            } else if (pattern === VIBRATION_PATTERNS.SUCCESS) {
+                await Haptics.notification({ type: 'SUCCESS' });
+            } else {
+                await Haptics.impact({ style: 'MEDIUM' });
+            }
+            return;
+        } catch (e) {
+            console.warn('Capacitor Haptics failed', e);
+        }
+    }
+
     if (!navigator.vibrate) {
         console.warn('Vibration API not supported on this browser');
         return;
@@ -32,6 +46,20 @@ function vibrate(pattern) {
  * @returns {Promise<boolean>} - True if granted
  */
 async function requestNotificationPermission() {
+    // Use Capacitor Local Notifications if available
+    if (window.Capacitor && window.Capacitor.Plugins.LocalNotifications) {
+        const { LocalNotifications } = window.Capacitor.Plugins;
+        try {
+            let permStatus = await LocalNotifications.checkPermissions();
+            if (permStatus.display === 'prompt') {
+                permStatus = await LocalNotifications.requestPermissions();
+            }
+            return permStatus.display === 'granted';
+        } catch (e) {
+            console.warn('Capacitor LocalNotifications error', e);
+        }
+    }
+
     if (!("Notification" in window)) {
         console.warn("This browser does not support desktop notification");
         return false;
@@ -50,13 +78,29 @@ async function requestNotificationPermission() {
  * @param {string} title - Notification title
  * @param {string} body - Notification body text
  */
-function fireNotification(title, body) {
-    // CAPACITOR NOTE: Replace with @capacitor/local-notifications for background support:
-    // import { LocalNotifications } from '@capacitor/local-notifications';
-    // await LocalNotifications.schedule({ notifications: [{ title, body, id: Date.now() }] });
-
+async function fireNotification(title, body) {
     if (!window.appSettings.notifications_enabled) return;
     
+    // Use Capacitor Local Notifications if available
+    if (window.Capacitor && window.Capacitor.Plugins.LocalNotifications) {
+        const { LocalNotifications } = window.Capacitor.Plugins;
+        try {
+            await LocalNotifications.schedule({
+                notifications: [
+                    {
+                        title: title,
+                        body: body,
+                        id: Math.floor(Math.random() * 1000000),
+                        schedule: { at: new Date(Date.now() + 1000) } // Schedule slightly in future for reliable delivery
+                    }
+                ]
+            });
+            return;
+        } catch (e) {
+            console.warn('Capacitor LocalNotifications error', e);
+        }
+    }
+
     if (!("Notification" in window)) return;
 
     if (Notification.permission === 'granted') {
