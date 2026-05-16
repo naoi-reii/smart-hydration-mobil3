@@ -149,6 +149,16 @@ async function syncNativeReminders(reminders) {
     if (window.Capacitor && window.Capacitor.Plugins.LocalNotifications) {
         const { LocalNotifications } = window.Capacitor.Plugins;
         try {
+            // Create high-priority channel for Android 8+
+            await LocalNotifications.createChannel({
+                id: 'hydration_channel',
+                name: 'Hydration Reminders',
+                description: 'Time to drink water!',
+                importance: 5, // MAX importance for popup/sound
+                visibility: 1, // Public visibility on lockscreen
+                vibration: true
+            });
+
             // Cancel existing pending notifications
             const pending = await LocalNotifications.getPending();
             if (pending.notifications.length > 0) {
@@ -169,6 +179,7 @@ async function syncNativeReminders(reminders) {
                         id: notifId++,
                         title: "Drink Reminder",
                         body: rem.label,
+                        channelId: 'hydration_channel',
                         schedule: { 
                             at: new Date(now + (interval * i)),
                             allowWhileIdle: true 
