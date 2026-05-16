@@ -169,8 +169,7 @@ async function syncNativeReminders(reminders) {
                         id: notifId++,
                         title: "Drink Reminder",
                         body: rem.label,
-                        schedule: { at: new Date(now + (interval * i)) },
-                        smallIcon: "ic_stat_icon_config_sample" // generic small icon if needed, or omit
+                        schedule: { at: new Date(now + (interval * i)) }
                     });
                 }
             });
