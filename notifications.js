@@ -169,7 +169,10 @@ async function syncNativeReminders(reminders) {
                         id: notifId++,
                         title: "Drink Reminder",
                         body: rem.label,
-                        schedule: { at: new Date(now + (interval * i)) }
+                        schedule: { 
+                            at: new Date(now + (interval * i)),
+                            allowWhileIdle: true 
+                        }
                     });
                 }
             });

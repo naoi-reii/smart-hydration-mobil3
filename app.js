@@ -184,10 +184,16 @@ function toggleAuthMode() {
     }
 }
 
-function showMainApp() {
+async function showMainApp() {
     document.getElementById('screen-login').classList.remove('active');
     document.getElementById('main-app').classList.remove('hidden');
     switchTab('tracker');
+    
+    // Request notification permission immediately on login so background sync works
+    if (window.notifyLayer && window.notifyLayer.requestNotificationPermission) {
+        await window.notifyLayer.requestNotificationPermission();
+    }
+    
     startReminderChecks();
 }
 
@@ -318,15 +324,15 @@ async function refreshReminders() {
 }
 
 async function handleAddReminder() {
+    // Request permission first
+    await window.notifyLayer.requestNotificationPermission();
+
     const label = document.getElementById('reminder-label').value || "Time to drink water!";
     const interval = parseInt(document.getElementById('reminder-interval').value);
     
     await window.dbLayer.addReminder(state.currentUser.user_id, label, interval);
     window.notifyLayer.vibrate(window.notifyLayer.VIBRATION_PATTERNS.SUCCESS);
     dispatch(EVENTS.DATA_UPDATED);
-    
-    // Request permission if not granted
-    await window.notifyLayer.requestNotificationPermission();
 }
 
 window.handleDeleteReminder = async (id) => {
