@@ -236,6 +236,14 @@ function refreshUI() {
 async function refreshTracker() {
     if (!state.currentUser) return;
     
+    // Update Header Date
+    const dateEl = document.getElementById('current-date');
+    if (dateEl) {
+        const now = new Date();
+        const options = { month: 'long', day: 'numeric', year: 'numeric' };
+        dateEl.textContent = now.toLocaleDateString('en-US', options);
+    }
+
     const logs = await window.dbLayer.getTodayLogs(state.currentUser.user_id);
     const goal = state.settings?.daily_goal || 1925;
     const total = logs.reduce((sum, log) => sum + log.intake_ml, 0);
