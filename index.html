@@ -128,8 +128,26 @@
             <!-- Progress Tab -->
             <section id="tab-progress" class="tab-content">
                 <header class="tab-header">
-                    <h2>Weekly Progress</h2>
+                    <h2>Progress</h2>
                 </header>
+
+                <div class="progress-controls">
+                    <div class="timeframe-selector">
+                        <button class="timeframe-btn active" data-view="weekly">Weekly</button>
+                        <button class="timeframe-btn" data-view="monthly">Monthly</button>
+                        <button class="timeframe-btn" data-view="yearly">Yearly</button>
+                    </div>
+                    
+                    <div class="time-navigator">
+                        <button id="btn-prev-period" class="nav-arrow">
+                            <i data-lucide="chevron-left"></i>
+                        </button>
+                        <span id="period-label" class="period-label">May 10 - May 16, 2026</span>
+                        <button id="btn-next-period" class="nav-arrow">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
                 
                 <div class="card chart-container">
                     <canvas id="progress-chart"></canvas>
@@ -138,14 +156,14 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-value" id="stat-avg">0</div>
-                        <div class="stat-label">Avg Daily Intake</div>
+                        <div class="stat-label">Avg Intake</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="stat-best">0</div>
-                        <div class="stat-label">Best Day</div>
+                        <div class="stat-label" id="label-best">Best Day</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-goal-met">0</div>
+                    <div class="stat-card full-width">
+                        <div class="stat-value" id="stat-goal-met">0/0 days</div>
                         <div class="stat-label">Goals Met</div>
                     </div>
                 </div>
@@ -189,7 +207,7 @@
                             <span class="slider round"></span>
                         </label>
                     </div>
-                    <button id="btn-test-notification" class="btn btn-outline btn-small">Test Notification</button>
+                    <button id="btn-test-notification" class="btn btn-outline btn-small" style="margin-top: 0.75rem;">Test Notification</button>
                 </div>
 
                 <div class="card">
@@ -210,7 +228,7 @@
 
                 <div class="card">
                     <h3>Account</h3>
-                    <button id="btn-open-change-password" class="btn btn-outline">Change Password</button>
+                    <button id="btn-open-change-password" class="btn btn-outline" style="margin-top: 0.75rem;">Change Password</button>
                     <button id="btn-logout" class="btn btn-danger btn-block">Log Out</button>
                 </div>
             </section>

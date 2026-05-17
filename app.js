@@ -23,7 +23,9 @@ let state = {
     activeTab: 'tracker',
     activeReminders: [],
     chart: null,
-    dbReady: false
+    dbReady: false,
+    progressView: 'weekly',
+    progressDateOffset: 0
 };
 
 // --- 3. Initialization ---
@@ -121,6 +123,29 @@ function setupEventListeners() {
     document.getElementById('btn-apply-calc').addEventListener('click', handleApplyGoal);
     ['calc-weight', 'calc-gender', 'calc-activity'].forEach(id => {
         document.getElementById(id).addEventListener('input', updateCalcResult);
+    });
+
+    // Progress Controls
+    document.querySelectorAll('.timeframe-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            state.progressView = e.target.dataset.view;
+            state.progressDateOffset = 0; // Reset offset when changing view
+            refreshProgress();
+        });
+    });
+
+    document.getElementById('btn-prev-period').addEventListener('click', () => {
+        state.progressDateOffset++;
+        refreshProgress();
+    });
+
+    document.getElementById('btn-next-period').addEventListener('click', () => {
+        if (state.progressDateOffset > 0) {
+            state.progressDateOffset--;
+            refreshProgress();
+        }
     });
 
     // Bus Listeners
@@ -384,28 +409,57 @@ function startReminderChecks() {
 
 // --- 9. Progress Logic ---
 async function refreshProgress() {
-    const stats = await window.dbLayer.getWeeklyStats(state.currentUser.user_id);
+    if (!state.currentUser) return;
+
+    const { start, end, label, days } = calculateDateRange(state.progressView, state.progressDateOffset);
+    
+    // Update Period Label
+    document.getElementById('period-label').textContent = label;
+    
+    // Update Best Label
+    const bestLabel = document.getElementById('label-best');
+    if (state.progressView === 'yearly') bestLabel.textContent = 'Best Month';
+    else bestLabel.textContent = 'Best Day';
+
+    // Update Next Period Button State
+    document.getElementById('btn-next-period').style.opacity = state.progressDateOffset === 0 ? '0.3' : '1';
+    document.getElementById('btn-next-period').style.pointerEvents = state.progressDateOffset === 0 ? 'none' : 'auto';
+
+    const groupBy = state.progressView === 'yearly' ? 'month' : 'day';
+    const stats = await window.dbLayer.getStats(state.currentUser.user_id, start, end, groupBy);
     const goal = state.settings?.daily_goal || 1925;
     
     const labels = stats.map(s => {
-        const date = new Date(s.log_date);
-        return date.toLocaleDateString([], { weekday: 'short' });
+        // Fix for Yearly view labels: Use UTC to avoid timezone shift back to Dec
+        if (state.progressView === 'yearly') {
+            const [year, month] = s.log_date.split('-');
+            const date = new Date(Date.UTC(year, month - 1, 1));
+            return date.toLocaleDateString([], { month: 'short', timeZone: 'UTC' });
+        }
+        
+        const date = new Date(s.log_date + 'T00:00:00'); // Use ISO format to avoid local timezone shifts
+        if (state.progressView === 'weekly') return date.toLocaleDateString([], { weekday: 'short' });
+        if (state.progressView === 'monthly') return date.getDate();
+        return s.log_date;
     });
+
     const data = stats.map(s => s.total_ml);
     const colors = data.map(val => {
-        if (val < goal * 0.5) return '#EF4444'; // Red
-        if (val < goal) return '#4A6CF7';      // Blue
-        return '#22C55E';                      // Green
+        if (val === 0) return 'var(--border)';
+        if (val < goal * 0.5) return 'var(--danger)';
+        if (val < goal) return 'var(--primary)';
+        return 'var(--success)';
     });
 
     // Update Stats Row
-    const avg = data.length ? Math.round(data.reduce((a,b) => a+b, 0) / data.length) : 0;
+    const activeData = data.filter(v => v > 0);
+    const avg = activeData.length ? Math.round(activeData.reduce((a,b) => a+b, 0) / activeData.length) : 0;
     const best = data.length ? Math.max(...data) : 0;
     const met = data.filter(v => v >= goal).length;
     
     document.getElementById('stat-avg').textContent = `${avg}ml`;
     document.getElementById('stat-best').textContent = `${best}ml`;
-    document.getElementById('stat-goal-met').textContent = met;
+    document.getElementById('stat-goal-met').textContent = `${met}/${days} days`;
 
     // Render Chart
     const ctx = document.getElementById('progress-chart').getContext('2d');
@@ -419,19 +473,79 @@ async function refreshProgress() {
                 label: 'Intake (ml)',
                 data: data,
                 backgroundColor: colors,
-                borderRadius: 8
+                borderRadius: state.progressView === 'monthly' ? 4 : 8
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: { beginAtZero: true, grid: { display: false } },
-                x: { grid: { display: false } }
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { font: { size: 10 } }
+                },
+                x: { 
+                    grid: { display: false },
+                    ticks: { font: { size: 10 }, autoSkip: state.progressView === 'monthly' }
+                }
             },
-            plugins: { legend: { display: false } }
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.raw} ml`
+                    }
+                }
+            }
         }
     });
+}
+
+function calculateDateRange(view, offset) {
+    const now = new Date();
+    // Normalize "now" to midnight local time for day-based calculations
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    let start, end, label, days;
+
+    if (view === 'weekly') {
+        const currentSunday = new Date(today);
+        currentSunday.setDate(today.getDate() - today.getDay());
+        
+        const targetSunday = new Date(currentSunday);
+        targetSunday.setDate(currentSunday.getDate() - (offset * 7));
+        
+        const targetSaturday = new Date(targetSunday);
+        targetSaturday.setDate(targetSunday.getDate() + 6);
+
+        start = targetSunday.toISOString().split('T')[0];
+        end = targetSaturday.toISOString().split('T')[0];
+        
+        const options = { month: 'short', day: 'numeric' };
+        label = `${targetSunday.toLocaleDateString([], options)} - ${targetSaturday.toLocaleDateString([], options)}`;
+        days = 7;
+        
+    } else if (view === 'monthly') {
+        const targetMonthStart = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+        const lastDayOfMonth = new Date(targetMonthStart.getFullYear(), targetMonthStart.getMonth() + 1, 0);
+
+        start = targetMonthStart.toISOString().split('T')[0];
+        end = lastDayOfMonth.toISOString().split('T')[0];
+        label = targetMonthStart.toLocaleDateString([], { month: 'long', year: 'numeric' });
+        days = lastDayOfMonth.getDate();
+
+    } else if (view === 'yearly') {
+        const targetYear = today.getFullYear() - offset;
+        start = `${targetYear}-01-01`;
+        end = `${targetYear}-12-31`;
+        label = `${targetYear}`;
+        
+        const isLeap = (targetYear % 4 === 0 && (targetYear % 100 !== 0 || targetYear % 400 === 0));
+        days = isLeap ? 366 : 365;
+    }
+
+    return { start, end, label, days };
 }
 
 // --- 10. Settings Logic ---

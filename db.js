@@ -269,18 +269,56 @@ async function deleteLog(logId) {
     return await executeQuery(`DELETE FROM hydration_logs WHERE log_id = ?`, [logId]);
 }
 
-async function getWeeklyStats(userId) {
-    // Aggregates last 7 days
+async function getStats(userId, startDate, endDate, groupBy = 'day') {
+    // Aggregates data between startDate and endDate
+    // groupBy: 'day' or 'month'
+    
+    if (useFallback) {
+        const dbName = 'hydration_mock_db';
+        let mockDb = JSON.parse(localStorage.getItem(dbName) || '{"users":[], "hydration_logs":[], "reminders":[], "settings":[]}');
+        
+        const filteredLogs = mockDb.hydration_logs.filter(l => {
+            const logDate = l.logged_at.split(' ')[0];
+            return l.user_id === userId && logDate >= startDate && logDate <= endDate;
+        });
+
+        // Grouping logic for mock DB
+        const results = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (groupBy === 'day') {
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.toISOString().split('T')[0];
+                const total = filteredLogs
+                    .filter(l => l.logged_at.startsWith(dateStr))
+                    .reduce((sum, l) => sum + l.intake_ml, 0);
+                results.push({ log_date: dateStr, total_ml: total });
+            }
+        } else if (groupBy === 'month') {
+            // Group by month for yearly view
+            for (let m = 0; m < 12; m++) {
+                const monthDate = new Date(start.getFullYear(), m, 1);
+                const monthStr = monthDate.toISOString().substring(0, 7); // YYYY-MM
+                const total = filteredLogs
+                    .filter(l => l.logged_at.startsWith(monthStr))
+                    .reduce((sum, l) => sum + l.intake_ml, 0);
+                results.push({ log_date: monthStr, total_ml: total });
+            }
+        }
+        return results;
+    }
+
+    const groupFormat = groupBy === 'day' ? '%Y-%m-%d' : '%Y-%m';
     return await queryResults(`
         SELECT 
-            strftime('%w', logged_at) as day_of_week,
-            date(logged_at) as log_date,
+            strftime('${groupFormat}', logged_at) as log_date,
             SUM(intake_ml) as total_ml
         FROM hydration_logs 
-        WHERE user_id = ? AND logged_at >= date('now', 'localtime', '-6 days')
+        WHERE user_id = ? AND date(logged_at) >= ? AND date(logged_at) <= ?
         GROUP BY log_date
         ORDER BY log_date ASC
-    `, [userId]);
+    `, [userId, startDate, endDate]);
 }
 
 // Reminders
@@ -324,7 +362,7 @@ window.dbLayer = {
     getLogsForUser,
     getTodayLogs,
     deleteLog,
-    getWeeklyStats,
+    getStats,
     addReminder,
     getReminders,
     deleteReminder,
