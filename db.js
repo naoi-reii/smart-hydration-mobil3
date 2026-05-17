@@ -56,7 +56,7 @@ async function createTables() {
             log_id    INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id   INTEGER NOT NULL,
             intake_ml REAL NOT NULL,
-            logged_at TEXT DEFAULT (datetime('now')),
+            logged_at TEXT DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         );`,
         `CREATE TABLE IF NOT EXISTS reminders (
@@ -98,17 +98,17 @@ async function seedData() {
 
         // Sample logs for last 7 days
         const logs = [
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 500, datetime('now', '-2 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 500, datetime('now', '-4 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 250, datetime('now', '-6 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 600, datetime('now', '-1 day'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 400, datetime('now', '-1 day', '-3 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 300, datetime('now', '-1 day', '-6 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 2000, datetime('now', '-2 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 800, datetime('now', '-3 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 1925, datetime('now', '-4 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 1100, datetime('now', '-5 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 600, datetime('now', '-6 days'));`
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 500, datetime('now', 'localtime', '-2 hours'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 500, datetime('now', 'localtime', '-4 hours'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 250, datetime('now', 'localtime', '-6 hours'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 600, datetime('now', 'localtime', '-1 day'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 400, datetime('now', 'localtime', '-1 day', '-3 hours'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 300, datetime('now', 'localtime', '-1 day', '-6 hours'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 2000, datetime('now', 'localtime', '-2 days'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 800, datetime('now', 'localtime', '-3 days'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 1925, datetime('now', 'localtime', '-4 days'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 1100, datetime('now', 'localtime', '-5 days'));`,
+            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 600, datetime('now', 'localtime', '-6 days'));`
         ];
 
         for (const log of logs) {
@@ -149,11 +149,13 @@ async function executeQuery(query, params = []) {
                 mockDb.users.push({ user_id: 1, username: 'admin', password: 'admin123', display_name: 'Admin', daily_goal: 1925 });
              }
         } else if (query.includes('INSERT INTO hydration_logs')) {
+            const localDate = new Date();
+            const localISO = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000)).toISOString().split('.')[0];
             mockDb.hydration_logs.push({
                 log_id: mockDb.hydration_logs.length + 1,
                 user_id: params[0],
                 intake_ml: params[1],
-                logged_at: params[2] || new Date().toISOString()
+                logged_at: params[2] || localISO
             });
         } else if (query.includes('INSERT INTO reminders')) {
             mockDb.reminders.push({
@@ -206,8 +208,9 @@ async function queryResults(query, params = []) {
             const settings = mockDb.settings.find(s => s.user_id === params[0]) || { user_id: params[0], notifications_enabled: 1, haptic_enabled: 1, dark_mode: 0 };
             const user = mockDb.users.find(u => u.user_id === params[0]) || {};
             return [{ ...settings, daily_goal: user.daily_goal || 1925, display_name: user.display_name || '' }];
-        } else if (query.includes('SELECT * FROM hydration_logs WHERE user_id = ? AND date(logged_at) = date(\'now\')')) {
-            const today = new Date().toISOString().split('T')[0];
+        } else if (query.includes('SELECT * FROM hydration_logs WHERE user_id = ? AND date(logged_at) = date(\'now\', \'localtime\')')) {
+            const now = new Date();
+            const today = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
             return mockDb.hydration_logs.filter(l => l.user_id === params[0] && l.logged_at.startsWith(today));
         } else if (query.includes('SELECT * FROM hydration_logs WHERE user_id = ? ORDER BY logged_at DESC')) {
             return mockDb.hydration_logs.filter(l => l.user_id === params[0]).sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at));
@@ -217,7 +220,8 @@ async function queryResults(query, params = []) {
             // Very simplified weekly stats
             const last7Days = [];
             for (let i = 6; i >= 0; i--) {
-                const date = new Date();
+                const now = new Date();
+                const date = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
                 date.setDate(date.getDate() - i);
                 const dateStr = date.toISOString().split('T')[0];
                 const total = mockDb.hydration_logs
@@ -258,7 +262,7 @@ async function getLogsForUser(userId) {
 }
 
 async function getTodayLogs(userId) {
-    return await queryResults(`SELECT * FROM hydration_logs WHERE user_id = ? AND date(logged_at) = date('now') ORDER BY logged_at DESC`, [userId]);
+    return await queryResults(`SELECT * FROM hydration_logs WHERE user_id = ? AND date(logged_at) = date('now', 'localtime') ORDER BY logged_at DESC`, [userId]);
 }
 
 async function deleteLog(logId) {
@@ -273,7 +277,7 @@ async function getWeeklyStats(userId) {
             date(logged_at) as log_date,
             SUM(intake_ml) as total_ml
         FROM hydration_logs 
-        WHERE user_id = ? AND logged_at >= date('now', '-6 days')
+        WHERE user_id = ? AND logged_at >= date('now', 'localtime', '-6 days')
         GROUP BY log_date
         ORDER BY log_date ASC
     `, [userId]);
