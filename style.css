@@ -32,19 +32,20 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-html {
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
     background-color: var(--bg);
 }
 
 body {
     font-family: 'Inter', sans-serif;
-    background-color: var(--bg);
     color: var(--text);
     line-height: 1.5;
     display: flex;
     justify-content: center;
-    min-height: 100vh;
-    overflow-x: hidden;
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -52,10 +53,11 @@ body {
     width: 100%;
     max-width: 430px;
     background-color: var(--bg);
-    min-height: 100vh;
+    height: 100%;
     position: relative;
     display: flex;
     flex-direction: column;
+    overscroll-behavior: none;
 }
 
 /* Utilities */
@@ -102,13 +104,31 @@ body {
     z-index: 10;
 }
 
-/* Screens & Tabs */
+#main-app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Hide scrollbars but keep functionality */
 .screen, .tab-content {
     display: none;
     padding: 1.5rem;
     flex: 1;
     overflow-y: auto;
-    padding-bottom: 80px; /* Space for bottom nav */
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 90px;
+    overscroll-behavior: none;
+    
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+.screen::-webkit-scrollbar,
+.tab-content::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
 }
 
 .screen.active, .tab-content.active {
