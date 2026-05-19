@@ -2,5 +2,15 @@
   "appId": "com.smarthydration.app",
   "appName": "Drink Reminder",
   "webDir": "www",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "plugins": {
+    "CapacitorSQLite": {
+      "androidIsEncryption": false,
+      "androidBiometric": {
+        "biometricAuth": false,
+        "biometricTitle": "SQLite login",
+        "biometricSubTitle": "Log in using your biometric"
+      }
+    }
+  }
 }

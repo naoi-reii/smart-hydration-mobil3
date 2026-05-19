@@ -1,11 +1,12 @@
 /**
  * db.js - SQLite abstraction layer for Smart Hydration System
- * Uses @capacitor-community/sqlite for native and jeep-sqlite for browser.
+ * Uses @capacitor-community/sqlite for native and LocalStorage for fallback.
  */
 
 // Detect environment
 const isNative = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
-let db = null;
+const DB_NAME = 'hydration_db';
+let sqlitePlugin = null;
 let useFallback = false;
 
 /**
@@ -13,18 +14,31 @@ let useFallback = false;
  */
 async function initDatabase() {
     try {
-        if (isNative) {
-            // In Vanilla JS APK, we check for the plugin globally
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorSQLite) {
-                // Future optimization: Implement native SQLite connection here
-                // For now, we use the robust fallback to ensure the app works immediately
-                useFallback = true;
-            } else {
-                useFallback = true;
+        if (isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorSQLite) {
+            sqlitePlugin = window.Capacitor.Plugins.CapacitorSQLite;
+            
+            // 1. Check if connection already exists
+            const { result } = await sqlitePlugin.isConnection({ database: DB_NAME, readonly: false });
+            
+            if (!result) {
+                // 2. Create the connection
+                await sqlitePlugin.createConnection({
+                    database: DB_NAME,
+                    version: 1,
+                    encrypted: false,
+                    mode: "no-encryption",
+                    readonly: false
+                });
             }
+
+            // 3. Open the database
+            await sqlitePlugin.open({ database: DB_NAME });
+            useFallback = false;
+            console.log('Native SQLite initialized');
         } else {
-            // Browser - jeep-sqlite fallback or LocalStorage
+            // Browser or Plugin missing - Use LocalStorage fallback
             useFallback = true;
+            console.log('Using LocalStorage fallback');
         }
 
         await createTables();
@@ -42,7 +56,6 @@ async function initDatabase() {
  * Create tables if they don't exist
  */
 async function createTables() {
-    if (useFallback) return; // LocalStorage mock handles its own structure
     const queries = [
         `CREATE TABLE IF NOT EXISTS users (
             user_id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,8 +90,25 @@ async function createTables() {
         );`
     ];
 
-    for (const query of queries) {
-        await executeQuery(query);
+    if (!useFallback && sqlitePlugin) {
+        // For native, we can run these as a single execution block
+        try {
+            await sqlitePlugin.execute({
+                database: DB_NAME,
+                statements: queries.join('\n')
+            });
+        } catch (err) {
+            console.error('Failed to create tables natively:', err);
+            // Fallback to individual execution if batch fails
+            for (const query of queries) {
+                await executeQuery(query);
+            }
+        }
+    } else {
+        // Mock DB doesn't need table creation but we keep the loop for consistency if needed
+        for (const query of queries) {
+            await executeQuery(query);
+        }
     }
 }
 
@@ -87,35 +117,34 @@ async function createTables() {
  */
 async function seedData() {
     // Check if seeded already
-    if (localStorage.getItem('db_seeded')) return;
+    const isSeeded = useFallback 
+        ? localStorage.getItem('db_seeded')
+        : (await queryResults("SELECT count(*) as count FROM users")).length > 0;
+
+    if (isSeeded && isSeeded !== 'false' && isSeeded !== 0) return;
 
     try {
         // Create admin user
-        await executeQuery(`INSERT OR IGNORE INTO users (username, password, display_name, daily_goal) VALUES ('admin', 'admin123', 'Admin', 1925);`);
+        await executeQuery(`INSERT OR IGNORE INTO users (username, password, display_name, daily_goal) VALUES (?, ?, ?, ?);`, 
+            ['admin', 'admin123', 'Admin', 1925]);
         
         // Settings for admin (user_id 1)
-        await executeQuery(`INSERT OR IGNORE INTO settings (user_id, notifications_enabled, haptic_enabled, dark_mode) VALUES (1, 1, 1, 0);`);
+        await executeQuery(`INSERT OR IGNORE INTO settings (user_id, notifications_enabled, haptic_enabled, dark_mode) VALUES (?, ?, ?, ?);`, 
+            [1, 1, 1, 0]);
 
         // Sample logs for last 7 days
-        const logs = [
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 500, datetime('now', 'localtime', '-2 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 500, datetime('now', 'localtime', '-4 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 250, datetime('now', 'localtime', '-6 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 600, datetime('now', 'localtime', '-1 day'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 400, datetime('now', 'localtime', '-1 day', '-3 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 300, datetime('now', 'localtime', '-1 day', '-6 hours'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 2000, datetime('now', 'localtime', '-2 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 800, datetime('now', 'localtime', '-3 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 1925, datetime('now', 'localtime', '-4 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 1100, datetime('now', 'localtime', '-5 days'));`,
-            `INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (1, 600, datetime('now', 'localtime', '-6 days'));`
-        ];
-
-        for (const log of logs) {
-            await executeQuery(log);
+        // Note: We use individual inserts here for simplicity and cross-compatibility
+        const now = new Date();
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(now);
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            
+            await executeQuery(`INSERT INTO hydration_logs (user_id, intake_ml, logged_at) VALUES (?, ?, ?);`, 
+                [1, Math.floor(Math.random() * 1000) + 500, `${dateStr} 12:00:00`]);
         }
 
-        localStorage.setItem('db_seeded', 'true');
+        if (useFallback) localStorage.setItem('db_seeded', 'true');
         console.log('Data seeded successfully');
     } catch (err) {
         console.error('Seeding failed:', err);
@@ -126,8 +155,18 @@ async function seedData() {
  * Helper to execute a single query (Write)
  */
 async function executeQuery(query, params = []) {
-    if (isNative && !useFallback) {
-        return await db.run(query, params);
+    if (!useFallback && sqlitePlugin) {
+        try {
+            const res = await sqlitePlugin.run({
+                database: DB_NAME,
+                statement: query,
+                values: params
+            });
+            return res;
+        } catch (err) {
+            console.error('Native Execution Error:', err, query);
+            throw err;
+        }
     } else {
         // WEB & APK FALLBACK: Using LocalStorage to mock a functional DB
         const dbName = 'hydration_mock_db';
@@ -149,13 +188,11 @@ async function executeQuery(query, params = []) {
                 mockDb.users.push({ user_id: 1, username: 'admin', password: 'admin123', display_name: 'Admin', daily_goal: 1925 });
              }
         } else if (query.includes('INSERT INTO hydration_logs')) {
-            const localDate = new Date();
-            const localISO = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000)).toISOString().split('.')[0];
             mockDb.hydration_logs.push({
                 log_id: mockDb.hydration_logs.length + 1,
                 user_id: params[0],
                 intake_ml: params[1],
-                logged_at: params[2] || localISO
+                logged_at: params[2] || new Date().toISOString().replace('T', ' ').split('.')[0]
             });
         } else if (query.includes('INSERT INTO reminders')) {
             mockDb.reminders.push({
@@ -195,14 +232,25 @@ async function executeQuery(query, params = []) {
  * Helper to fetch results (Read)
  */
 async function queryResults(query, params = []) {
-    if (isNative && !useFallback) {
-        const res = await db.query(query, params);
-        return res.values;
+    if (!useFallback && sqlitePlugin) {
+        try {
+            const res = await sqlitePlugin.query({
+                database: DB_NAME,
+                statement: query,
+                values: params
+            });
+            return res.values || [];
+        } catch (err) {
+            console.error('Native Query Error:', err, query);
+            return [];
+        }
     } else {
         const dbName = 'hydration_mock_db';
         let mockDb = JSON.parse(localStorage.getItem(dbName) || '{"users":[], "hydration_logs":[], "reminders":[], "settings":[]}');
 
-        if (query.includes('SELECT * FROM users WHERE username = ?')) {
+        if (query.includes('SELECT count(*) as count FROM users')) {
+            return mockDb.users.length > 0 ? [{count: mockDb.users.length}] : [];
+        } else if (query.includes('SELECT * FROM users WHERE username = ?')) {
             return mockDb.users.filter(u => u.username === params[0]);
         } else if (query.includes('SELECT s.*, u.daily_goal, u.display_name FROM settings')) {
             const settings = mockDb.settings.find(s => s.user_id === params[0]) || { user_id: params[0], notifications_enabled: 1, haptic_enabled: 1, dark_mode: 0 };
@@ -235,6 +283,7 @@ async function queryResults(query, params = []) {
         return []; 
     }
 }
+
 
 // --- CRUD Helpers ---
 
