@@ -455,7 +455,13 @@ async function refreshProgress() {
     const activeData = data.filter(v => v > 0);
     const avg = activeData.length ? Math.round(activeData.reduce((a,b) => a+b, 0) / activeData.length) : 0;
     const best = data.length ? Math.max(...data) : 0;
-    const met = data.filter(v => v >= goal).length;
+    let met = 0;
+    if (state.progressView === 'yearly') {
+        const dailyStats = await window.dbLayer.getStats(state.currentUser.user_id, start, end, 'day');
+        met = dailyStats.filter(s => s.total_ml >= goal).length;
+    } else {
+        met = data.filter(v => v >= goal).length;
+    }
     
     document.getElementById('stat-avg').textContent = `${avg}ml`;
     document.getElementById('stat-best').textContent = `${best}ml`;
